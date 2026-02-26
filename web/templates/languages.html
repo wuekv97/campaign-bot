@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Languages - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Languages</h1>
+    <div class="header-actions">
+        <button class="btn btn-primary" onclick="showAddLanguageModal()">
+            <i class="fas fa-plus"></i> Add Language
+        </button>
+    </div>
+</div>
+
+<!-- Languages List -->
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Flag</th>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Default</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="languagesTable">
+            <tr>
+                <td colspan="6" style="text-align: center;">
+                    <div class="loading" style="margin: 2rem auto;"></div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Language Modal -->
+<div class="modal-overlay" id="addLanguageModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Add New Language</h2>
+            <button class="modal-close" onclick="closeModal('addLanguageModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Language Code</label>
+                <input type="text" class="form-input" id="newLangCode" placeholder="e.g. es, de, fr" maxlength="5">
+                <small class="text-muted">ISO 639-1 code (2-3 letters)</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Language Name</label>
+                <input type="text" class="form-input" id="newLangName" placeholder="e.g. Español, Deutsch">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Flag Emoji</label>
+                <input type="text" class="form-input" id="newLangFlag" placeholder="e.g. 🇪🇸, 🇩🇪" maxlength="4">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('addLanguageModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="addLanguage()">Add Language</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Language Modal -->
+<div class="modal-overlay" id="editLanguageModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Edit Language</h2>
+            <button class="modal-close" onclick="closeModal('editLanguageModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">Language Code</label>
+                <input type="text" class="form-input" id="editLangCode" readonly>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Language Name</label>
+                <input type="text" class="form-input" id="editLangName">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Flag Emoji</label>
+                <input type="text" class="form-input" id="editLangFlag" maxlength="4">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('editLanguageModal')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveLanguage()">Save Changes</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let languages = [];
+
+async function loadLanguages() {
+    try {
+        languages = await API.get('/api/languages');
+        renderLanguages();
+    } catch (error) {
+        console.error('Error loading languages:', error);
+        Toast.error('Failed to load languages');
+    }
+}
+
+function renderLanguages() {
+    const tbody = document.getElementById('languagesTable');
+    
+    if (languages.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No languages configured</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = languages.map(lang => `
+        <tr>
+            <td style="font-size: 1.5rem; text-align: center;">${lang.flag}</td>
+            <td><code>${lang.code}</code></td>
+            <td>${lang.name}</td>
+            <td>
+                <span class="badge ${lang.is_active ? 'badge-success' : 'badge-secondary'}">
+                    ${lang.is_active ? 'Active' : 'Inactive'}
+                </span>
+            </td>
+            <td>
+                ${lang.is_default ? '<span class="badge badge-primary">Default</span>' : ''}
+            </td>
+            <td>
+                <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                    <button class="btn btn-sm btn-secondary" onclick="editLanguage('${lang.code}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm ${lang.is_active ? 'btn-secondary' : 'btn-success'}" 
+                            onclick="toggleLanguage('${lang.code}', ${!lang.is_active})">
+                        <i class="fas fa-${lang.is_active ? 'eye-slash' : 'eye'}"></i>
+                    </button>
+                    ${!lang.is_default ? `
+                        <button class="btn btn-sm btn-danger" onclick="deleteLanguage('${lang.code}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showAddLanguageModal() {
+    document.getElementById('newLangCode').value = '';
+    document.getElementById('newLangName').value = '';
+    document.getElementById('newLangFlag').value = '';
+    openModal('addLanguageModal');
+}
+
+function openModal(id) {
+    const modal = document.getElementById(id);
+    modal.style.display = 'flex';
+    // Force reflow
+    modal.offsetHeight;
+    requestAnimationFrame(() => modal.classList.add('show'));
+}
+
+function closeModal(id) {
+    const modal = document.getElementById(id);
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 250);
+}
+
+async function addLanguage() {
+    const code = document.getElementById('newLangCode').value.trim().toLowerCase();
+    const name = document.getElementById('newLangName').value.trim();
+    const flag = document.getElementById('newLangFlag').value.trim();
+    
+    if (!code || !name || !flag) {
+        Toast.error('Please fill all fields');
+        return;
+    }
+    
+    if (!/^[a-z]{2,5}$/.test(code)) {
+        Toast.error('Invalid language code');
+        return;
+    }
+    
+    try {
+        await API.post('/api/languages', { code, name, flag });
+        Toast.success('Language added! Now add translations in Bot Texts.');
+        closeModal('addLanguageModal');
+        await loadLanguages();
+    } catch (error) {
+        Toast.error(error.message || 'Failed to add language');
+    }
+}
+
+function editLanguage(code) {
+    const lang = languages.find(l => l.code === code);
+    if (!lang) return;
+    
+    document.getElementById('editLangCode').value = lang.code;
+    document.getElementById('editLangName').value = lang.name;
+    document.getElementById('editLangFlag').value = lang.flag;
+    openModal('editLanguageModal');
+}
+
+async function saveLanguage() {
+    const code = document.getElementById('editLangCode').value;
+    const name = document.getElementById('editLangName').value.trim();
+    const flag = document.getElementById('editLangFlag').value.trim();
+    
+    if (!name || !flag) {
+        Toast.error('Please fill all fields');
+        return;
+    }
+    
+    try {
+        await API.patch(`/api/languages/${code}`, { name, flag });
+        Toast.success('Language updated');
+        closeModal('editLanguageModal');
+        await loadLanguages();
+    } catch (error) {
+        Toast.error('Failed to update language');
+    }
+}
+
+async function toggleLanguage(code, isActive) {
+    try {
+        await API.patch(`/api/languages/${code}`, { is_active: isActive });
+        Toast.success(`Language ${isActive ? 'activated' : 'deactivated'}`);
+        await loadLanguages();
+    } catch (error) {
+        Toast.error('Failed to toggle language');
+    }
+}
+
+async function deleteLanguage(code) {
+    if (!confirm(`Delete language "${code}" and ALL its translations?`)) return;
+    
+    try {
+        await API.delete(`/api/languages/${code}`);
+        Toast.success('Language deleted');
+        await loadLanguages();
+    } catch (error) {
+        Toast.error(error.message || 'Failed to delete language');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', loadLanguages);
+</script>
+
+<style>
+.badge-secondary {
+    background: var(--bg-hover);
+    color: var(--text-muted);
+}
+
+.badge-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s;
+}
+
+.modal-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border-radius: 0.75rem;
+    max-width: 450px;
+    width: 90%;
+    transform: translateY(20px) scale(0.98);
+    opacity: 0;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.modal-overlay.show .modal-content {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: var(--text);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+code {
+    background: var(--bg-hover);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-family: monospace;
+}
+</style>
+{% endblock %}
+

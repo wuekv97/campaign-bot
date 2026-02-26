@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Users</h1>
+    <div class="header-actions">
+        <select class="form-select" id="languageFilter" onchange="loadUsers()">
+            <option value="">All languages</option>
+            <option value="pt">🇵🇹 Português</option>
+            <option value="hu">🇭🇺 Magyar</option>
+            <option value="en">🇬🇧 English</option>
+        </select>
+        <select class="form-select" id="sourceFilter" onchange="loadUsers()">
+            <option value="">All sources</option>
+        </select>
+        <select class="form-select" id="sortBy" onchange="loadUsers()">
+            <option value="created_desc">Newest first</option>
+            <option value="created_asc">Oldest first</option>
+            <option value="source">By source</option>
+        </select>
+        <button class="btn btn-secondary" onclick="refreshUsers()" title="Refresh data">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Language</th>
+                <th>Source</th>
+                <th>Registration</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="usersTable">
+            <tr>
+                <td colspan="7" style="text-align: center;">
+                    <div class="loading" style="margin: 2rem auto;"></div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function refreshUsers() {
+    const btn = event.target.closest('button');
+    const icon = btn.querySelector('svg');
+    
+    // Animate icon
+    icon.style.animation = 'spin 1s linear infinite';
+    btn.disabled = true;
+    
+    await loadUsers();
+    
+    // Stop animation
+    icon.style.animation = '';
+    btn.disabled = false;
+    
+    Toast.success('Data refreshed');
+}
+
+async function loadUsers() {
+    const language = document.getElementById('languageFilter').value;
+    const source = document.getElementById('sourceFilter').value;
+    const sortBy = document.getElementById('sortBy').value;
+    
+    let url = '/api/users?';
+    const params = [];
+    
+    if (language) params.push(`language=${language}`);
+    if (source) params.push(`source=${source}`);
+    if (sortBy) params.push(`sort=${sortBy}`);
+    
+    url += params.join('&');
+    
+    try {
+        const users = await API.get(url);
+        const tbody = document.getElementById('usersTable');
+        
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No users</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td>${user.telegram_id}</td>
+                <td>${user.full_name || '-'}</td>
+                <td>${user.username ? '@' + user.username : '-'}</td>
+                <td>${user.language.toUpperCase()}</td>
+                <td><small>${user.source || 'direct'}</small></td>
+                <td><small>${UI.formatDate(user.created_at)}</small></td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.telegram_id}, '${user.full_name || user.username || user.telegram_id}')" title="Delete user">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+async function deleteUser(telegramId, userName) {
+    Modal.confirm({
+        title: '🗑️ Delete User',
+        message: `Delete user <strong>${userName}</strong> (${telegramId})?<br><br>This will remove all their data including campaign activations.`,
+        confirmText: 'Delete',
+        confirmType: 'danger',
+        onConfirm: async () => {
+            try {
+                await API.delete(`/api/users/${telegramId}`);
+                Toast.success('User deleted');
+                loadUsers();
+            } catch (error) {
+                Toast.error('Failed to delete user');
+            }
+        }
+    });
+}
+
+async function loadSources() {
+    try {
+        const response = await API.get('/api/sources');
+        const sourceSelect = document.getElementById('sourceFilter');
+        
+        response.sources.forEach(source => {
+            const option = document.createElement('option');
+            option.value = source;
+            option.textContent = source;
+            sourceSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading sources:', error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadSources();
+    loadUsers();
+});
+</script>
+{% endblock %}
+

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Panel{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/modal.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <div class="bot-selector" onclick="toggleBotSelector()">
+                    <img src="/static/img/bot-avatar.jpg" alt="Campaign Bot" class="bot-selector-avatar">
+                    <div class="bot-selector-info">
+                        <span class="bot-selector-name">Campaign Bot</span>
+                        <span class="bot-selector-status">Active</span>
+                    </div>
+                    <i class="fas fa-chevron-down bot-selector-arrow"></i>
+                </div>
+                <div class="bot-selector-dropdown" id="botSelectorDropdown">
+                    <div class="bot-selector-item active">
+                        <img src="/static/img/bot-avatar.jpg" alt="Campaign Bot" class="bot-selector-avatar">
+                        <div class="bot-selector-info">
+                            <span class="bot-selector-name">Campaign Bot</span>
+                            <span class="bot-selector-status">5K+ users</span>
+                        </div>
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="bot-selector-divider"></div>
+                    <div class="bot-selector-item add-bot">
+                        <i class="fas fa-plus"></i>
+                        <span>Add new bot</span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 1rem; padding: 0.75rem; background: var(--bg-hover); border-radius: 0.5rem;">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 0.875rem; font-weight: 500; color: var(--text);">{{ username }}</div>
+                        <button onclick="logout()" style="background: none; border: none; color: var(--danger); font-size: 0.75rem; cursor: pointer; padding: 0; margin-top: 0.25rem; display: flex; align-items: center; gap: 0.25rem;">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <nav>
+                <ul class="sidebar-menu">
+                    <li>
+                        <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
+                            <i class="fas fa-dashboard"></i>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/campaigns" class="{% if '/campaigns' in request.url.path %}active{% endif %}">
+                            <i class="fas fa-gift"></i>
+                            Campaigns
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/users" class="{% if request.url.path == '/users' %}active{% endif %}">
+                            <i class="fas fa-users"></i>
+                            Users
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/broadcast" class="{% if request.url.path == '/broadcast' %}active{% endif %}">
+                            <i class="fas fa-paper-plane"></i>
+                            Broadcast
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/texts" class="{% if request.url.path == '/texts' %}active{% endif %}">
+                            <i class="fas fa-language"></i>
+                            Bot Texts
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/languages" class="{% if request.url.path == '/languages' %}active{% endif %}">
+                            <i class="fas fa-globe"></i>
+                            Languages
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
+                            <i class="fas fa-cog"></i>
+                            Settings
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/ui.js"></script>
+    <script>
+        function logout() {
+            // Delete cookie
+            document.cookie = 'auth_credentials=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            // Redirect to login
+            window.location.href = '/login';
+        }
+        
+        function toggleBotSelector() {
+            const dropdown = document.getElementById('botSelectorDropdown');
+            const arrow = document.querySelector('.bot-selector-arrow');
+            dropdown.classList.toggle('show');
+            arrow.classList.toggle('rotated');
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.bot-selector') && !e.target.closest('.bot-selector-dropdown')) {
+                const dropdown = document.getElementById('botSelectorDropdown');
+                const arrow = document.querySelector('.bot-selector-arrow');
+                if (dropdown) {
+                    dropdown.classList.remove('show');
+                    arrow.classList.remove('rotated');
+                }
+            }
+        });
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+

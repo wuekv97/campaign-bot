@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+
+{% block title %}Create Campaign - Admin Panel{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/telegram-preview.css">
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Create Campaign</h1>
+    <div class="header-actions">
+        <a href="/campaigns" class="btn btn-sm">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div class="message-builder">
+    <form id="campaignForm">
+        <!-- Basic Information -->
+        <h2 class="mb-2">Basic Information</h2>
+        
+        <div class="form-group">
+            <label class="form-label">Campaign Code *</label>
+            <input type="text" class="form-input" id="code" required placeholder="offer_welcome" pattern="[a-z0-9_]+">
+            <small class="text-muted">Only lowercase letters, numbers and _</small>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Title *</label>
+            <input type="text" class="form-input" id="title" required placeholder="Welcome Bonus">
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="description" placeholder="Brief campaign description"></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Duration (days) *</label>
+            <input type="number" class="form-input" id="activeDays" required min="1" value="30">
+        </div>
+
+        <!-- Messages -->
+        <h2 class="mb-2 mt-2">Messages</h2>
+        
+        <div class="form-group">
+            <label class="form-label">🇵🇹 Message (Portuguese)</label>
+            <div class="text-editor">
+                <div class="text-editor-toolbar">
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messagePt', 'bold')" title="Bold"><i class="fas fa-bold"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messagePt', 'italic')" title="Italic"><i class="fas fa-italic"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messagePt', 'underline')" title="Underline"><i class="fas fa-underline"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messagePt', 'strikeThrough')" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+                    <div class="toolbar-divider"></div>
+                    <button type="button" class="toolbar-btn" onclick="insertCodeIn('messagePt')" title="Code"><i class="fas fa-code"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execLinkIn('messagePt')" title="Link"><i class="fas fa-link"></i></button>
+                </div>
+                <div class="wysiwyg-editor" id="messagePt" contenteditable="true" data-placeholder="🎁 Bem-vindo!..." oninput="debouncedUpdatePreview()"></div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">🇭🇺 Message (Hungarian)</label>
+            <div class="text-editor">
+                <div class="text-editor-toolbar">
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageHu', 'bold')" title="Bold"><i class="fas fa-bold"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageHu', 'italic')" title="Italic"><i class="fas fa-italic"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageHu', 'underline')" title="Underline"><i class="fas fa-underline"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageHu', 'strikeThrough')" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+                    <div class="toolbar-divider"></div>
+                    <button type="button" class="toolbar-btn" onclick="insertCodeIn('messageHu')" title="Code"><i class="fas fa-code"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execLinkIn('messageHu')" title="Link"><i class="fas fa-link"></i></button>
+                </div>
+                <div class="wysiwyg-editor" id="messageHu" contenteditable="true" data-placeholder="🎁 Üdvözöljük!..." oninput="debouncedUpdatePreview()"></div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">🇬🇧 Message (English)</label>
+            <div class="text-editor">
+                <div class="text-editor-toolbar">
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageEn', 'bold')" title="Bold"><i class="fas fa-bold"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageEn', 'italic')" title="Italic"><i class="fas fa-italic"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageEn', 'underline')" title="Underline"><i class="fas fa-underline"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execFormatIn('messageEn', 'strikeThrough')" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+                    <div class="toolbar-divider"></div>
+                    <button type="button" class="toolbar-btn" onclick="insertCodeIn('messageEn')" title="Code"><i class="fas fa-code"></i></button>
+                    <button type="button" class="toolbar-btn" onclick="execLinkIn('messageEn')" title="Link"><i class="fas fa-link"></i></button>
+                </div>
+                <div class="wysiwyg-editor" id="messageEn" contenteditable="true" data-placeholder="🎁 Welcome!..." oninput="debouncedUpdatePreview()"></div>
+            </div>
+            <small class="text-muted">Select text and click formatting button</small>
+        </div>
+
+        <!-- Buttons -->
+        <h2 class="mb-2 mt-2">Buttons</h2>
+        
+        <div class="button-list" id="buttonsList">
+            <p class="text-muted">No buttons</p>
+        </div>
+        
+        <div class="form-group mt-2">
+            <label class="form-label">Add Button</label>
+            <div class="flex gap-2">
+                <input type="text" class="form-input" id="buttonText" placeholder="Button text" style="flex: 1;">
+                <input type="url" class="form-input" id="buttonUrl" placeholder="https://..." style="flex: 2;">
+                <button type="button" class="btn btn-primary" onclick="addButton()">
+                    <i class="fas fa-plus"></i> Add
+                </button>
+            </div>
+        </div>
+
+        <!-- Media -->
+        <h2 class="mb-2 mt-2">Media</h2>
+        
+        <div class="custom-file-upload">
+            <input type="file" id="mediaFile" accept="image/*,video/*" onchange="uploadMedia()">
+            <label for="mediaFile" class="file-upload-btn">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>Choose Photo or Video</span>
+            </label>
+        </div>
+        <small class="text-muted" style="display: block; margin-top: 0.5rem;">Photo (JPG, PNG) or video (MP4)</small>
+        
+        <div id="mediaPreview" style="display: none;" class="file-preview">
+            <div id="mediaPreviewContent"></div>
+        </div>
+
+        <!-- Telegram Preview -->
+        <h2 class="mb-2 mt-2">Live Preview</h2>
+        
+        <div class="preview-tabs" id="previewTabs">
+            <button type="button" class="preview-tab" data-lang="pt">🇵🇹 PT</button>
+            <button type="button" class="preview-tab" data-lang="hu">🇭🇺 HU</button>
+            <button type="button" class="preview-tab active" data-lang="en">🇬🇧 EN</button>
+        </div>
+        
+        <div class="telegram-preview" id="preview">
+            <div class="telegram-header">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+                <div class="telegram-chat-info">
+                    <h3>Campaign Bot</h3>
+                    <p>bot</p>
+                </div>
+            </div>
+            <div class="telegram-messages">
+                <div class="telegram-message">
+                    <img src="/static/img/bot-avatar.jpg" class="telegram-message-avatar">
+                    <div class="telegram-message-wrapper">
+                        <div class="telegram-bot-name">Campaign Bot</div>
+                        <div class="telegram-message-bubble">
+                            <div class="telegram-text text-muted">Select language for preview</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2 mt-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Create Campaign
+            </button>
+            <a href="/campaigns" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Variables
+let uploadedMedia = null;
+let mediaPreviewURL = null;
+let currentPreviewLang = 'en';
+let buttons = [];
+
+// Debounce utility for performance
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Render buttons list
+function renderButtons() {
+    const container = document.getElementById('buttonsList');
+    
+    if (buttons.length === 0) {
+        container.innerHTML = '<p class="text-muted">No buttons</p>';
+        return;
+    }
+    
+    container.innerHTML = buttons.map((btn, i) => `
+        <div class="button-item">
+            <span class="button-text">${btn.text}</span>
+            <span class="button-url">${btn.url}</span>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeButton(${i})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeButton(index) {
+    buttons.splice(index, 1);
+    renderButtons();
+    updatePreviewForLang();
+}
+
+// WYSIWYG formatting functions
+function execFormatIn(editorId, command) {
+    const editor = document.getElementById(editorId);
+    editor.focus();
+    document.execCommand(command, false, null);
+    updatePreviewForLang();
+}
+
+function insertCodeIn(editorId) {
+    const editor = document.getElementById(editorId);
+    editor.focus();
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const code = document.createElement('code');
+        code.appendChild(range.extractContents());
+        range.insertNode(code);
+    }
+    updatePreviewForLang();
+}
+
+function execLinkIn(editorId) {
+    const editor = document.getElementById(editorId);
+    editor.focus();
+    
+    const url = prompt('Enter URL:', 'https://');
+    if (!url) return;
+    
+    const selection = window.getSelection();
+    if (selection.toString()) {
+        document.execCommand('createLink', false, url);
+    } else {
+        const linkText = prompt('Enter link text:', 'Click here');
+        if (!linkText) return;
+        document.execCommand('insertHTML', false, `<a href="${url}">${linkText}</a>`);
+    }
+    updatePreviewForLang();
+}
+
+// Clean HTML for Telegram (only supported tags)
+function cleanHtmlForTelegram(html) {
+    if (!html) return '';
+    
+    let clean = html
+        .replace(/<div>/gi, '\n')
+        .replace(/<\/div>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<p>/gi, '')
+        .replace(/<\/p>/gi, '\n');
+    
+    clean = clean
+        .replace(/<strong>/gi, '<b>')
+        .replace(/<\/strong>/gi, '</b>')
+        .replace(/<em>/gi, '<i>')
+        .replace(/<\/em>/gi, '</i>')
+        .replace(/<strike>/gi, '<s>')
+        .replace(/<\/strike>/gi, '</s>');
+    
+    clean = clean.replace(/<(?!\/?(?:b|i|u|s|code|pre|a)\b)[^>]*>/gi, '');
+    clean = clean.replace(/\n{3,}/g, '\n\n').trim();
+    
+    return clean;
+}
+
+function addButton() {
+    const text = document.getElementById('buttonText').value.trim();
+    const url = document.getElementById('buttonUrl').value.trim();
+    
+    if (!text || !url) {
+        Toast.error('Please fill in button text and URL');
+        return;
+    }
+    
+    if (!url.startsWith('http')) {
+        Toast.error('URL must start with http:// or https://');
+        return;
+    }
+    
+    buttons.push({ text, url });
+    renderButtons();
+    Toast.success('Button added');
+    
+    document.getElementById('buttonText').value = '';
+    document.getElementById('buttonUrl').value = '';
+    
+    updatePreviewForLang();
+}
+
+async function uploadMedia() {
+    const fileInput = document.getElementById('mediaFile');
+    const file = fileInput.files[0];
+    
+    if (!file) return;
+    
+    Toast.info('Uploading media...', 'Please wait');
+    
+    // Create preview URL for display
+    mediaPreviewURL = URL.createObjectURL(file);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/upload/media', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) throw new Error('Upload failed');
+        
+        const data = await response.json();
+        uploadedMedia = data;
+        
+        const preview = document.getElementById('mediaPreview');
+        const content = document.getElementById('mediaPreviewContent');
+        
+        const sizeKB = (data.size / 1024).toFixed(1);
+        const icon = data.media_type === 'photo' ? 'image' : 'video';
+        
+        content.innerHTML = `
+            <div class="file-preview-item">
+                <div class="file-preview-icon">
+                    <i class="fas fa-${icon}"></i>
+                </div>
+                <div class="file-preview-info">
+                    <div class="file-preview-name">${data.filename}</div>
+                    <div class="file-preview-size">${sizeKB} KB • ${data.media_type}</div>
+                </div>
+                <button onclick="removeMedia()" class="file-preview-remove">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        preview.style.display = 'block';
+        Toast.success(`${data.media_type === 'photo' ? 'Photo' : 'Video'} uploaded successfully`);
+        
+        updatePreviewForLang();
+        
+    } catch (error) {
+        console.error('Error uploading media:', error);
+        Toast.error('Failed to upload media');
+    }
+}
+
+function removeMedia() {
+    if (mediaPreviewURL) {
+        URL.revokeObjectURL(mediaPreviewURL);
+        mediaPreviewURL = null;
+    }
+    uploadedMedia = null;
+    document.getElementById('mediaPreview').style.display = 'none';
+    document.getElementById('mediaFile').value = '';
+    Toast.info('Media removed');
+    
+    updatePreviewForLang();
+}
+
+function selectPreviewLang(lang) {
+    currentPreviewLang = lang;
+    // Update active tab
+    document.querySelectorAll('.preview-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.lang === lang);
+    });
+    showPreview(lang);
+}
+
+function updatePreviewForLang() {
+    if (currentPreviewLang) {
+        showPreview(currentPreviewLang);
+    }
+}
+
+// Debounced version for input events
+const debouncedUpdatePreview = debounce(updatePreviewForLang, 50);
+
+function showPreview(lang) {
+    const previewDiv = document.getElementById('preview');
+    if (!previewDiv) return;
+    
+    const ptEl = document.getElementById('messagePt');
+    const huEl = document.getElementById('messageHu');
+    const enEl = document.getElementById('messageEn');
+    
+    const messages = {
+        pt: ptEl ? ptEl.innerHTML : '',
+        hu: huEl ? huEl.innerHTML : '',
+        en: enEl ? enEl.innerHTML : ''
+    };
+    
+    const message = messages[lang] || '';
+    
+    if (!message) {
+        previewDiv.innerHTML = `
+            <div class="telegram-header">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+                <div class="telegram-chat-info">
+                    <h3>Campaign Bot</h3>
+                    <p>bot</p>
+                </div>
+            </div>
+            <div class="telegram-messages">
+                <div class="telegram-message">
+                    <img src="/static/img/bot-avatar.jpg" class="telegram-message-avatar">
+                    <div class="telegram-message-wrapper">
+                        <div class="telegram-bot-name">Campaign Bot</div>
+                        <div class="telegram-message-bubble">
+                            <div class="telegram-text text-muted">Enter message for ${lang.toUpperCase()} to see preview</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Build message content
+    let bubbleContent = '';
+    
+    // Media
+    if (uploadedMedia && mediaPreviewURL) {
+        bubbleContent += '<div class="telegram-media">';
+        if (uploadedMedia.media_type === 'photo') {
+            bubbleContent += `<img src="${mediaPreviewURL}" alt="Preview">`;
+        } else {
+            bubbleContent += `<video src="${mediaPreviewURL}" controls></video>`;
+        }
+        bubbleContent += '</div>';
+    }
+    
+    // Text
+    bubbleContent += `<div class="telegram-text">${message}</div>`;
+    
+    // Time
+    const now = new Date().toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'});
+    bubbleContent += `<div class="telegram-time">${now}</div>`;
+    
+    // Buttons
+    let buttonsContent = '';
+    if (buttons.length > 0) {
+        buttonsContent += '<div class="telegram-buttons">';
+        for (let i = 0; i < buttons.length; i += 2) {
+            buttonsContent += '<div class="telegram-buttons-row">';
+            buttonsContent += `<button class="telegram-button">${buttons[i].text}</button>`;
+            if (buttons[i + 1]) {
+                buttonsContent += `<button class="telegram-button">${buttons[i + 1].text}</button>`;
+            }
+            buttonsContent += '</div>';
+        }
+        buttonsContent += '</div>';
+    }
+    
+    // Reactions (decorative)
+    const reactions = `
+        <div class="telegram-reactions">
+            <span class="telegram-reaction selected"><span class="telegram-reaction-emoji">🔥</span><span class="telegram-reaction-count">24</span></span>
+            <span class="telegram-reaction"><span class="telegram-reaction-emoji">❤️</span><span class="telegram-reaction-count">12</span></span>
+            <span class="telegram-reaction"><span class="telegram-reaction-emoji">👍</span><span class="telegram-reaction-count">8</span></span>
+        </div>
+    `;
+    
+    previewDiv.innerHTML = `
+        <div class="telegram-header">
+            <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+            <div class="telegram-chat-info">
+                <h3>Campaign Bot</h3>
+                <p>bot</p>
+            </div>
+        </div>
+        <div class="telegram-messages">
+            <div class="telegram-message">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-message-avatar">
+                <div class="telegram-message-wrapper">
+                    <div class="telegram-bot-name">Campaign Bot</div>
+                    <div class="telegram-message-bubble">${bubbleContent}</div>
+                    ${buttonsContent}
+                    ${reactions}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Add click handlers for preview tabs
+    document.querySelectorAll('#previewTabs .preview-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            selectPreviewLang(tab.dataset.lang);
+        });
+    });
+    
+    // Set default active tab
+    selectPreviewLang('en');
+    renderButtons();
+});
+
+document.getElementById('campaignForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const data = {
+        code: document.getElementById('code').value,
+        title: document.getElementById('title').value,
+        description: document.getElementById('description').value || null,
+        active_days: parseInt(document.getElementById('activeDays').value),
+        message_pt: cleanHtmlForTelegram(document.getElementById('messagePt').innerHTML) || null,
+        message_hu: cleanHtmlForTelegram(document.getElementById('messageHu').innerHTML) || null,
+        message_en: cleanHtmlForTelegram(document.getElementById('messageEn').innerHTML) || null,
+        media_type: uploadedMedia ? uploadedMedia.media_type : null,
+        media_file_id: uploadedMedia ? uploadedMedia.file_id : null,
+        buttons_json: buttons.length > 0 ? JSON.stringify(buttons) : null
+    };
+    
+    try {
+        Toast.info('Creating campaign...', 'Please wait');
+        const response = await API.post('/api/campaigns', data);
+        Toast.success('Campaign created successfully!');
+        setTimeout(() => {
+            window.location.href = '/campaigns';
+        }, 1000);
+    } catch (error) {
+        console.error('Error creating campaign:', error);
+        Toast.error('Failed to create campaign');
+    }
+});
+</script>
+
+<style>
+.button-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.button-text {
+    font-weight: 500;
+}
+
+.button-url {
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.preview-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.preview-tab {
+    padding: 0.5rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    font-size: 0.875rem;
+}
+
+.preview-tab:hover {
+    background: var(--bg-hover);
+}
+
+.preview-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+</style>
+{% endblock %}
+

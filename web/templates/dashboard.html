@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Dashboard</h1>
+    <div class="header-actions">
+        <span class="text-muted">Hello, {{ username }}!</span>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="cards" id="statsCards">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Total Users</span>
+            <i class="fas fa-users card-icon"></i>
+        </div>
+        <div class="card-value" id="totalUsers">
+            <div class="loading"></div>
+        </div>
+        <div class="card-change">all time</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Active Campaigns</span>
+            <i class="fas fa-gift card-icon"></i>
+        </div>
+        <div class="card-value" id="activeCampaigns">
+            <div class="loading"></div>
+        </div>
+        <div class="card-change" id="activeCampaignsLabel">active</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">New Today</span>
+            <i class="fas fa-user-plus card-icon"></i>
+        </div>
+        <div class="card-value" id="newUsers">
+            <div class="loading"></div>
+        </div>
+        <div class="card-change">registered today</div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Activations</span>
+            <i class="fas fa-check-circle card-icon"></i>
+        </div>
+        <div class="card-value" id="totalActivations">
+            <div class="loading"></div>
+        </div>
+        <div class="card-change">all campaigns</div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>Activations</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="campaignsTable">
+            <tr>
+                <td colspan="4" style="text-align: center;">
+                    <div class="loading" style="margin: 2rem auto;"></div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load statistics
+async function loadStats() {
+    try {
+        const [stats, statsToday] = await Promise.all([
+            API.get('/api/stats'),
+            API.get('/api/stats/today')
+        ]);
+        
+        // Update cards
+        document.getElementById('totalUsers').textContent = stats.total_users;
+        document.getElementById('newUsers').textContent = statsToday.new_today;
+        document.getElementById('activeCampaigns').textContent = statsToday.active_campaigns;
+        document.getElementById('activeCampaignsLabel').textContent = `${statsToday.active_campaigns} active`;
+        document.getElementById('totalActivations').textContent = statsToday.total_activations;
+        
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        document.getElementById('totalUsers').textContent = '—';
+        document.getElementById('newUsers').textContent = '—';
+        document.getElementById('activeCampaigns').textContent = '—';
+        document.getElementById('totalActivations').textContent = '—';
+    }
+}
+
+// Load campaigns
+async function loadCampaigns() {
+    try {
+        const response = await fetch('/api/campaigns');
+        const campaigns = await response.json();
+        
+        const activeCount = campaigns.filter(c => c.is_active).length;
+        document.getElementById('activeCampaigns').textContent = activeCount;
+        document.getElementById('activeCampaignsLabel').textContent = `${activeCount} active`;
+        
+        const tbody = document.getElementById('campaignsTable');
+        tbody.innerHTML = campaigns.slice(0, 5).map(campaign => `
+            <tr>
+                <td>
+                    <strong>${campaign.title}</strong><br>
+                    <small class="text-muted">${campaign.code}</small>
+                </td>
+                <td>${campaign.activations}</td>
+                <td>
+                    <span class="badge badge-${campaign.is_active ? 'success' : 'danger'}">
+                        ${campaign.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td>
+                    <a href="/campaigns/edit/${campaign.code}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                </td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading campaigns:', error);
+    }
+}
+
+// Load data on page open
+document.addEventListener('DOMContentLoaded', () => {
+    loadStats();
+    loadCampaigns();
+});
+
+// Update every 30 seconds
+setInterval(() => {
+    loadStats();
+    loadCampaigns();
+}, 30000);
+</script>
+{% endblock %}
+

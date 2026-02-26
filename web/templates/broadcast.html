@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+
+{% block title %}Broadcast - Admin Panel{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/telegram-preview.css">
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Create Broadcast</h1>
+</div>
+
+<div class="message-builder">
+    <form id="broadcastForm">
+        <!-- Filters -->
+        <h2 class="mb-2">Audience Filters</h2>
+        
+        <div class="form-group">
+            <label class="form-label">Language</label>
+            <select class="form-select" id="language">
+                <option value="">All languages</option>
+                <option value="pt">🇵🇹 Portuguese</option>
+                <option value="hu">🇭🇺 Hungarian</option>
+                <option value="en">🇬🇧 English</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Source</label>
+            <select class="form-select" id="source">
+                <option value="">All sources</option>
+            </select>
+            <small class="text-muted">Filter by user source/offer</small>
+        </div>
+
+        <!-- Message -->
+        <h2 class="mb-2 mt-2">Message</h2>
+        
+        <div class="form-group">
+            <label class="form-label">Message Text *</label>
+            <div class="text-editor">
+                <div class="text-editor-toolbar">
+                    <button type="button" class="toolbar-btn" onclick="execFormat('bold')" title="Bold">
+                        <i class="fas fa-bold"></i>
+                    </button>
+                    <button type="button" class="toolbar-btn" onclick="execFormat('italic')" title="Italic">
+                        <i class="fas fa-italic"></i>
+                    </button>
+                    <button type="button" class="toolbar-btn" onclick="execFormat('underline')" title="Underline">
+                        <i class="fas fa-underline"></i>
+                    </button>
+                    <button type="button" class="toolbar-btn" onclick="execFormat('strikeThrough')" title="Strikethrough">
+                        <i class="fas fa-strikethrough"></i>
+                    </button>
+                    <div class="toolbar-divider"></div>
+                    <button type="button" class="toolbar-btn" onclick="insertCode()" title="Code">
+                        <i class="fas fa-code"></i>
+                    </button>
+                    <div class="toolbar-divider"></div>
+                    <button type="button" class="toolbar-btn" onclick="execLink()" title="Insert Link">
+                        <i class="fas fa-link"></i>
+                    </button>
+                </div>
+                <div class="wysiwyg-editor" id="text" contenteditable="true" data-placeholder="Enter broadcast message..." oninput="debouncedUpdatePreview()"></div>
+            </div>
+            <small class="text-muted">Select text and click formatting button</small>
+        </div>
+
+        <!-- Buttons -->
+        <h2 class="mb-2 mt-2">Buttons</h2>
+        
+        <div class="button-list" id="buttonsList">
+            <p class="text-muted">No buttons</p>
+        </div>
+        
+        <div class="form-group mt-2">
+            <label class="form-label">Add Button</label>
+            <div class="flex gap-2">
+                <input type="text" class="form-input" id="buttonText" placeholder="Button text" style="flex: 1;">
+                <input type="url" class="form-input" id="buttonUrl" placeholder="https://..." style="flex: 2;">
+                <button type="button" class="btn btn-primary" onclick="addButton()">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Media -->
+        <h2 class="mb-2 mt-2">Media</h2>
+        
+        <div class="custom-file-upload">
+            <input type="file" id="mediaFile" accept="image/*,video/*" onchange="uploadMedia()">
+            <label for="mediaFile" class="file-upload-btn">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span>Choose Photo or Video</span>
+            </label>
+        </div>
+        
+        <div id="mediaPreview" style="display: none;" class="file-preview">
+            <div id="mediaPreviewContent"></div>
+        </div>
+
+        <!-- Telegram Preview -->
+        <h2 class="mb-2 mt-2">Live Preview</h2>
+        
+        <div class="telegram-preview" id="preview">
+            <div class="telegram-header">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+                <div class="telegram-chat-info">
+                    <h3>Campaign Bot</h3>
+                    <p>bot</p>
+                </div>
+            </div>
+            <div class="telegram-messages">
+                <div class="telegram-message">
+                    <img src="/static/img/bot-avatar.jpg" class="telegram-message-avatar">
+                    <div class="telegram-message-wrapper">
+                        <div class="telegram-bot-name">Campaign Bot</div>
+                        <div class="telegram-message-bubble">
+                            <div class="telegram-text text-muted">Enter message text</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-2">
+            <div class="card-header">
+                <span class="card-title">Recipients</span>
+            </div>
+            <div class="card-value" id="recipientsCount">
+                <div class="loading"></div>
+            </div>
+            <p class="text-muted">users will receive this message</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2 mt-2">
+            <button type="submit" class="btn btn-success" style="flex: 1;">
+                <i class="fas fa-paper-plane"></i> Send Broadcast
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let uploadedMedia = null;
+let mediaPreviewURL = null;
+
+// Debounce utility for performance
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// WYSIWYG formatting functions
+function execFormat(command) {
+    document.execCommand(command, false, null);
+    document.getElementById('text').focus();
+    updatePreview();
+}
+
+function insertCode() {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const code = document.createElement('code');
+        code.appendChild(range.extractContents());
+        range.insertNode(code);
+    }
+    document.getElementById('text').focus();
+    updatePreview();
+}
+
+function execLink() {
+    const url = prompt('Enter URL:', 'https://');
+    if (!url) return;
+    
+    const selection = window.getSelection();
+    if (selection.toString()) {
+        document.execCommand('createLink', false, url);
+    } else {
+        const linkText = prompt('Enter link text:', 'Click here');
+        if (!linkText) return;
+        document.execCommand('insertHTML', false, `<a href="${url}">${linkText}</a>`);
+    }
+    document.getElementById('text').focus();
+    updatePreview();
+}
+
+// Clean HTML for Telegram (only supported tags)
+function cleanHtmlForTelegram(html) {
+    if (!html) return '';
+    
+    // Replace div/br with newlines
+    let clean = html
+        .replace(/<div>/gi, '\n')
+        .replace(/<\/div>/gi, '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<p>/gi, '')
+        .replace(/<\/p>/gi, '\n');
+    
+    // Convert to Telegram-supported tags
+    clean = clean
+        .replace(/<strong>/gi, '<b>')
+        .replace(/<\/strong>/gi, '</b>')
+        .replace(/<em>/gi, '<i>')
+        .replace(/<\/em>/gi, '</i>')
+        .replace(/<strike>/gi, '<s>')
+        .replace(/<\/strike>/gi, '</s>');
+    
+    // Remove any other unsupported tags but keep content
+    clean = clean.replace(/<(?!\/?(?:b|i|u|s|code|pre|a)\b)[^>]*>/gi, '');
+    
+    // Clean up multiple newlines
+    clean = clean.replace(/\n{3,}/g, '\n\n').trim();
+    
+    return clean;
+}
+
+// Get editor content cleaned for Telegram
+function getEditorContent() {
+    const editor = document.getElementById('text');
+    return cleanHtmlForTelegram(editor.innerHTML);
+}
+
+
+function addButton() {
+    const text = document.getElementById('buttonText').value.trim();
+    const url = document.getElementById('buttonUrl').value.trim();
+    
+    if (!text || !url) {
+        Toast.error('Please fill in button text and URL');
+        return;
+    }
+    
+    if (!url.startsWith('http')) {
+        Toast.error('URL must start with http:// or https://');
+        return;
+    }
+    
+    MessageBuilder.addButton(text, url);
+    Toast.success('Button added');
+    
+    document.getElementById('buttonText').value = '';
+    document.getElementById('buttonUrl').value = '';
+    
+    updatePreview();
+}
+
+async function uploadMedia() {
+    const fileInput = document.getElementById('mediaFile');
+    const file = fileInput.files[0];
+    
+    if (!file) return;
+    
+    Toast.info('Uploading media...', 'Please wait');
+    
+    // Create preview URL for display
+    mediaPreviewURL = URL.createObjectURL(file);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch('/api/upload/media', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) throw new Error('Upload failed');
+        
+        const data = await response.json();
+        uploadedMedia = data;
+        
+        const preview = document.getElementById('mediaPreview');
+        const content = document.getElementById('mediaPreviewContent');
+        
+        const sizeKB = (data.size / 1024).toFixed(1);
+        const icon = data.media_type === 'photo' ? 'image' : 'video';
+        
+        content.innerHTML = `
+            <div class="file-preview-item">
+                <div class="file-preview-icon">
+                    <i class="fas fa-${icon}"></i>
+                </div>
+                <div class="file-preview-info">
+                    <div class="file-preview-name">${data.filename}</div>
+                    <div class="file-preview-size">${sizeKB} KB • ${data.media_type}</div>
+                </div>
+                <button onclick="removeMedia()" class="file-preview-remove">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        preview.style.display = 'block';
+        Toast.success(`${data.media_type === 'photo' ? 'Photo' : 'Video'} uploaded successfully`);
+        
+        updatePreview();
+        
+    } catch (error) {
+        console.error('Error uploading media:', error);
+        Toast.error('Failed to upload media');
+    }
+}
+
+function removeMedia() {
+    if (mediaPreviewURL) {
+        URL.revokeObjectURL(mediaPreviewURL);
+        mediaPreviewURL = null;
+    }
+    uploadedMedia = null;
+    document.getElementById('mediaPreview').style.display = 'none';
+    document.getElementById('mediaFile').value = '';
+    Toast.info('Media removed');
+    
+    updatePreview();
+}
+
+function updatePreview() {
+    const textElement = document.getElementById('text');
+    const previewDiv = document.getElementById('preview');
+    
+    if (!textElement || !previewDiv) return;
+    
+    const text = textElement.innerHTML || '';
+    
+    if (!text) {
+        previewDiv.innerHTML = `
+            <div class="telegram-header">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+                <div class="telegram-chat-info">
+                    <h3>Campaign Bot</h3>
+                    <p>bot</p>
+                </div>
+            </div>
+            <div class="telegram-messages">
+                <div class="telegram-message">
+                    <img src="/static/img/bot-avatar.jpg" class="telegram-message-avatar">
+                    <div class="telegram-message-wrapper">
+                        <div class="telegram-bot-name">Campaign Bot</div>
+                        <div class="telegram-message-bubble">
+                            <div class="telegram-text text-muted">Enter message text</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Build message content
+    let bubbleContent = '';
+    
+    // Media
+    if (uploadedMedia && mediaPreviewURL) {
+        bubbleContent += '<div class="telegram-media">';
+        if (uploadedMedia.media_type === 'photo') {
+            bubbleContent += `<img src="${mediaPreviewURL}" alt="Preview">`;
+        } else {
+            bubbleContent += `<video src="${mediaPreviewURL}" controls></video>`;
+        }
+        bubbleContent += '</div>';
+    }
+    
+    // Text
+    bubbleContent += `<div class="telegram-text">${text}</div>`;
+    
+    // Time
+    const now = new Date().toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'});
+    bubbleContent += `<div class="telegram-time">${now}</div>`;
+    
+    // Buttons
+    let buttonsContent = '';
+    if (MessageBuilder.buttons.length > 0) {
+        buttonsContent += '<div class="telegram-buttons">';
+        const btns = MessageBuilder.buttons;
+        for (let i = 0; i < btns.length; i += 2) {
+            buttonsContent += '<div class="telegram-buttons-row">';
+            buttonsContent += `<button class="telegram-button">${btns[i].text}</button>`;
+            if (btns[i + 1]) {
+                buttonsContent += `<button class="telegram-button">${btns[i + 1].text}</button>`;
+            }
+            buttonsContent += '</div>';
+        }
+        buttonsContent += '</div>';
+    }
+    
+    // Reactions (decorative)
+    const reactions = `
+        <div class="telegram-reactions">
+            <span class="telegram-reaction selected"><span class="telegram-reaction-emoji">🔥</span><span class="telegram-reaction-count">24</span></span>
+            <span class="telegram-reaction"><span class="telegram-reaction-emoji">❤️</span><span class="telegram-reaction-count">12</span></span>
+            <span class="telegram-reaction"><span class="telegram-reaction-emoji">👍</span><span class="telegram-reaction-count">8</span></span>
+        </div>
+    `;
+    
+    previewDiv.innerHTML = `
+        <div class="telegram-header">
+            <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+            <div class="telegram-chat-info">
+                <h3>Campaign Bot</h3>
+                <p>bot</p>
+            </div>
+        </div>
+        <div class="telegram-messages">
+            <div class="telegram-message">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-message-avatar">
+                <div class="telegram-message-wrapper">
+                    <div class="telegram-bot-name">Campaign Bot</div>
+                    <div class="telegram-message-bubble">${bubbleContent}</div>
+                    ${buttonsContent}
+                    ${reactions}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Debounced version for input events
+const debouncedUpdatePreview = debounce(updatePreview, 50);
+
+// Обновление количества получателей при изменении фильтров
+async function updateRecipientsCount() {
+    const languageElement = document.getElementById('language');
+    const sourceElement = document.getElementById('source');
+    const recipientsElement = document.getElementById('recipientsCount');
+    
+    if (!languageElement || !sourceElement || !recipientsElement) {
+        return; // Elements not loaded yet
+    }
+    
+    const language = languageElement.value;
+    const source = sourceElement.value;
+    
+    try {
+        const stats = await API.get('/api/stats');
+        let count = stats.total_users;
+        
+        // Примерный подсчет с фильтрами
+        if (language && stats.by_language[language]) {
+            count = stats.by_language[language];
+        }
+        
+        recipientsElement.textContent = count;
+    } catch (error) {
+        console.error('Error getting recipients count:', error);
+        if (recipientsElement) {
+            recipientsElement.textContent = '—';
+        }
+    }
+}
+
+// Load sources
+async function loadSources() {
+    try {
+        const response = await API.get('/api/sources');
+        const sourceSelect = document.getElementById('source');
+        
+        response.sources.forEach(source => {
+            const option = document.createElement('option');
+            option.value = source;
+            option.textContent = source;
+            sourceSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading sources:', error);
+    }
+}
+
+// Начальная загрузка
+document.addEventListener('DOMContentLoaded', async () => {
+    // Add event listeners
+    const languageElement = document.getElementById('language');
+    const sourceElement = document.getElementById('source');
+    
+    if (languageElement) {
+        languageElement.addEventListener('change', updateRecipientsCount);
+    }
+    if (sourceElement) {
+        sourceElement.addEventListener('change', updateRecipientsCount);
+    }
+    
+    // Load data
+    await loadSources();
+    await updateRecipientsCount();
+    updatePreview();
+    
+    // Add form submit handler
+    const form = document.getElementById('broadcastForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const recipientsCount = document.getElementById('recipientsCount').textContent;
+            
+            Modal.confirm({
+                title: '📢 Send Broadcast',
+                message: `Are you sure you want to send this broadcast to <strong>${recipientsCount}</strong> users?`,
+                confirmText: 'Send',
+                confirmType: 'success',
+                onConfirm: async () => {
+                    // Show progress modal
+                    const progressModal = Modal.progress({
+                        title: 'Sending Broadcast...',
+                        message: `Sending to ${recipientsCount} users`
+                    });
+                    
+                    const data = {
+                        text: getEditorContent(),
+                        language: document.getElementById('language').value || null,
+                        source: document.getElementById('source').value || null,
+                        media_type: uploadedMedia ? uploadedMedia.media_type : null,
+                        media_file_id: uploadedMedia ? uploadedMedia.file_id : null,
+                        buttons_json: MessageBuilder.getButtonsJSON()
+                    };
+                    
+                    try {
+                        const response = await API.post('/api/broadcast', data);
+                        
+                        // Close progress modal
+                        Modal.close(progressModal);
+                        
+                        if (response.success) {
+                            // Show detailed report
+                            Modal.broadcastReport(response);
+                        } else {
+                            Toast.error('Broadcast failed');
+                        }
+                    } catch (error) {
+                        Modal.close(progressModal);
+                        console.error('Error creating broadcast:', error);
+                        Toast.error('Failed to send broadcast. Please try again.');
+                    }
+                }
+            });
+        });
+    }
+});
+</script>
+{% endblock %}
+

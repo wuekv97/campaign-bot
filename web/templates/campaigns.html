@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Campaigns - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Campaign Management</h1>
+    <div class="header-actions">
+        <a href="/campaigns/create" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Create Campaign
+        </a>
+    </div>
+</div>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>Campaign</th>
+                <th>Code</th>
+                <th>Activations</th>
+                <th>Period</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="campaignsTable">
+            <tr>
+                <td colspan="6" style="text-align: center;">
+                    <div class="loading" style="margin: 2rem auto;"></div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCampaigns() {
+    try {
+        const response = await fetch('/api/campaigns');
+        const campaigns = await response.json();
+        
+        const tbody = document.getElementById('campaignsTable');
+        
+        if (campaigns.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 3rem;">
+                        <p class="text-muted">No campaigns</p>
+                        <a href="/campaigns/create" class="btn btn-primary mt-2">
+                            <i class="fas fa-plus"></i> Create first campaign
+                        </a>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = campaigns.map(campaign => {
+            const activeFrom = new Date(campaign.active_from).toLocaleDateString('en');
+            const activeTo = campaign.active_to ? 
+                new Date(campaign.active_to).toLocaleDateString('en') : '∞';
+            
+            return `
+                <tr>
+                    <td>
+                        <strong>${campaign.title}</strong><br>
+                        ${campaign.description ? `<small class="text-muted">${campaign.description}</small>` : ''}
+                    </td>
+                    <td>
+                        <code>${campaign.code}</code>
+                        <button class="btn-copy" onclick="copyLink('${campaign.code}')" title="Copy deep link">
+                            <i class="fas fa-link"></i>
+                        </button>
+                    </td>
+                    <td>${campaign.activations}</td>
+                    <td>
+                        <small>${activeFrom} - ${activeTo}</small>
+                    </td>
+                    <td>
+                        <span class="badge badge-${campaign.is_active ? 'success' : 'danger'}">
+                            ${campaign.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                            <a href="/campaigns/edit/${campaign.code}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <button onclick="toggleCampaign('${campaign.code}', ${!campaign.is_active})" 
+                                    class="btn btn-${campaign.is_active ? 'danger' : 'success'} btn-sm">
+                                <i class="fas fa-${campaign.is_active ? 'pause' : 'play'}"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Error loading campaigns:', error);
+        alert('Error loading campaigns');
+    }
+}
+
+async function toggleCampaign(code, isActive) {
+    Modal.confirm({
+        title: isActive ? '✅ Activate Campaign' : '⏸️ Deactivate Campaign',
+        message: `Are you sure you want to ${isActive ? 'activate' : 'deactivate'} campaign <strong>${code}</strong>?`,
+        confirmText: isActive ? 'Activate' : 'Deactivate',
+        confirmType: isActive ? 'success' : 'danger',
+        onConfirm: async () => {
+            try {
+                const response = await fetch(`/api/campaigns/${code}`, {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({is_active: isActive})
+                });
+                
+                if (response.ok) {
+                    Toast.success(`Campaign ${isActive ? 'activated' : 'deactivated'} successfully`);
+                    loadCampaigns();
+                } else {
+                    Toast.error('Failed to update campaign');
+                }
+            } catch (error) {
+                console.error('Error toggling campaign:', error);
+                Toast.error('Failed to update campaign');
+            }
+        }
+    });
+}
+
+function copyLink(code) {
+    const botUsername = 'ambbtestbot';
+    const link = `https://t.me/${botUsername}?start=${code}`;
+    
+    navigator.clipboard.writeText(link).then(() => {
+        Toast.success('Deep link copied!');
+    }).catch(() => {
+        // Fallback
+        const input = document.createElement('input');
+        input.value = link;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        Toast.success('Deep link copied!');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadCampaigns);
+</script>
+
+<style>
+.btn-copy {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    margin-left: 0.25rem;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+
+.btn-copy:hover {
+    background: var(--bg-hover);
+    color: var(--primary);
+}
+</style>
+{% endblock %}
+

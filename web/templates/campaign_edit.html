@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Campaign - Admin Panel{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/telegram-preview.css">
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <h1>Edit Campaign</h1>
+    <div class="header-actions">
+        <a href="/campaigns" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+        </a>
+    </div>
+</div>
+
+<div id="loadingState" style="text-align: center; padding: 3rem;">
+    <div class="loading"></div>
+</div>
+
+<div id="editForm" style="display: none;">
+    <!-- Deep Link Box -->
+    <div class="card mb-2 deeplink-box">
+        <div class="deeplink-header">
+            <i class="fas fa-link"></i>
+            <span>Deep Link</span>
+        </div>
+        <div class="deeplink-content">
+            <input type="text" class="form-input" id="deeplink" readonly>
+            <button type="button" class="btn btn-primary" onclick="copyDeeplink()">
+                <i class="fas fa-copy"></i> Copy
+            </button>
+        </div>
+        <small class="text-muted">Share this link to activate the campaign for users</small>
+    </div>
+
+    <div class="message-builder">
+        <form id="campaignForm">
+            <!-- Basic Information -->
+            <h2 class="mb-2">Basic Information</h2>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Campaign Code</label>
+                    <input type="text" class="form-input" id="code" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <div id="statusBadge"></div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Title *</label>
+                <input type="text" class="form-input" id="title" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-textarea" id="description" rows="2"></textarea>
+            </div>
+
+            <!-- Messages -->
+            <h2 class="mb-2 mt-2">Messages</h2>
+            
+            <div class="form-group">
+                <label class="form-label">🇵🇹 Portuguese</label>
+                <textarea class="form-textarea" id="messagePt" rows="3" oninput="updatePreview()"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">🇭🇺 Hungarian</label>
+                <textarea class="form-textarea" id="messageHu" rows="3" oninput="updatePreview()"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">🇬🇧 English</label>
+                <textarea class="form-textarea" id="messageEn" rows="3" oninput="updatePreview()"></textarea>
+            </div>
+
+            <!-- Buttons -->
+            <h2 class="mb-2 mt-2">Buttons</h2>
+            
+            <div class="button-list" id="buttonsList">
+                <p class="text-muted">No buttons</p>
+            </div>
+            
+            <div class="form-row mt-1">
+                <input type="text" class="form-input" id="buttonText" placeholder="Button text">
+                <input type="text" class="form-input" id="buttonUrl" placeholder="URL">
+                <button type="button" class="btn btn-secondary" onclick="addButton()">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+
+            <!-- Actions -->
+            <div class="form-actions mt-2">
+                <button type="button" class="btn btn-danger" onclick="deleteCampaign()">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Preview -->
+    <div class="preview-section mt-2">
+        <h2 class="mb-2">Preview</h2>
+        <div class="preview-lang-tabs">
+            <button class="preview-tab active" onclick="setPreviewLang('en')">🇬🇧 EN</button>
+            <button class="preview-tab" onclick="setPreviewLang('pt')">🇵🇹 PT</button>
+            <button class="preview-tab" onclick="setPreviewLang('hu')">🇭🇺 HU</button>
+        </div>
+        <div class="telegram-preview" id="preview">
+            <div class="telegram-header">
+                <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+                <div class="telegram-chat-info">
+                    <h3>Campaign Bot</h3>
+                    <p>bot</p>
+                </div>
+            </div>
+            <div class="telegram-messages">
+                <div class="telegram-message">
+                    <div class="telegram-message-content">
+                        <div class="telegram-message-bubble">
+                            <div class="telegram-text text-muted">Select language to preview</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const campaignCode = '{{ code }}';
+let campaign = null;
+let buttons = [];
+let currentPreviewLang = 'en';
+
+async function loadCampaign() {
+    try {
+        const response = await API.get(`/api/campaigns/${campaignCode}`);
+        campaign = response;
+        
+        document.getElementById('code').value = campaign.code;
+        document.getElementById('title').value = campaign.title;
+        document.getElementById('description').value = campaign.description || '';
+        document.getElementById('messagePt').value = campaign.message_pt || '';
+        document.getElementById('messageHu').value = campaign.message_hu || '';
+        document.getElementById('messageEn').value = campaign.message_en || '';
+        
+        // Status badge
+        document.getElementById('statusBadge').innerHTML = `
+            <span class="badge badge-${campaign.is_active ? 'success' : 'danger'}">
+                ${campaign.is_active ? 'Active' : 'Inactive'}
+            </span>
+            <button class="btn btn-sm btn-${campaign.is_active ? 'danger' : 'success'} ml-1" 
+                    onclick="toggleStatus()">
+                ${campaign.is_active ? 'Deactivate' : 'Activate'}
+            </button>
+        `;
+        
+        // Deep link
+        const botUsername = 'ambbtestbot'; // You can get this from config
+        document.getElementById('deeplink').value = `https://t.me/${botUsername}?start=${campaign.code}`;
+        
+        // Buttons
+        if (campaign.buttons_json) {
+            try {
+                buttons = JSON.parse(campaign.buttons_json);
+                renderButtons();
+            } catch (e) {}
+        }
+        
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('editForm').style.display = 'block';
+        
+        updatePreview();
+        
+    } catch (error) {
+        console.error('Error loading campaign:', error);
+        Toast.error('Failed to load campaign');
+    }
+}
+
+function copyDeeplink() {
+    const input = document.getElementById('deeplink');
+    input.select();
+    document.execCommand('copy');
+    Toast.success('Deep link copied!');
+}
+
+function renderButtons() {
+    const container = document.getElementById('buttonsList');
+    
+    if (buttons.length === 0) {
+        container.innerHTML = '<p class="text-muted">No buttons</p>';
+        return;
+    }
+    
+    container.innerHTML = buttons.map((btn, i) => `
+        <div class="button-item">
+            <span class="button-text">${btn.text}</span>
+            <span class="button-url">${btn.url}</span>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeButton(${i})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function addButton() {
+    const text = document.getElementById('buttonText').value.trim();
+    const url = document.getElementById('buttonUrl').value.trim();
+    
+    if (!text || !url) {
+        Toast.error('Enter button text and URL');
+        return;
+    }
+    
+    buttons.push({ text, url });
+    renderButtons();
+    updatePreview();
+    
+    document.getElementById('buttonText').value = '';
+    document.getElementById('buttonUrl').value = '';
+}
+
+function removeButton(index) {
+    buttons.splice(index, 1);
+    renderButtons();
+    updatePreview();
+}
+
+function setPreviewLang(lang) {
+    currentPreviewLang = lang;
+    document.querySelectorAll('.preview-tab').forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
+    updatePreview();
+}
+
+function updatePreview() {
+    const messages = {
+        pt: document.getElementById('messagePt').value,
+        hu: document.getElementById('messageHu').value,
+        en: document.getElementById('messageEn').value
+    };
+    
+    const text = messages[currentPreviewLang] || '';
+    const previewDiv = document.getElementById('preview');
+    
+    let bubbleContent = '';
+    
+    if (text) {
+        bubbleContent = `<div class="telegram-text">${text}</div>`;
+    } else {
+        bubbleContent = `<div class="telegram-text text-muted">No message for this language</div>`;
+    }
+    
+    const now = new Date().toLocaleTimeString('en', {hour: '2-digit', minute: '2-digit'});
+    bubbleContent += `<div class="telegram-time">${now}</div>`;
+    
+    let buttonsHtml = '';
+    if (buttons.length > 0) {
+        buttonsHtml = '<div class="telegram-buttons">' + 
+            buttons.map(btn => `<button class="telegram-button"><i class="fas fa-external-link-alt"></i><span>${btn.text}</span></button>`).join('') +
+            '</div>';
+    }
+    
+    previewDiv.innerHTML = `
+        <div class="telegram-header">
+            <img src="/static/img/bot-avatar.jpg" class="telegram-avatar">
+            <div class="telegram-chat-info">
+                <h3>Campaign Bot</h3>
+                <p>bot</p>
+            </div>
+        </div>
+        <div class="telegram-messages">
+            <div class="telegram-message">
+                <div class="telegram-message-content">
+                    <div class="telegram-message-bubble">${bubbleContent}</div>
+                    ${buttonsHtml}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+async function toggleStatus() {
+    const newStatus = !campaign.is_active;
+    
+    try {
+        await API.patch(`/api/campaigns/${campaignCode}`, { is_active: newStatus });
+        Toast.success(`Campaign ${newStatus ? 'activated' : 'deactivated'}`);
+        loadCampaign();
+    } catch (error) {
+        Toast.error('Failed to update status');
+    }
+}
+
+async function deleteCampaign() {
+    Modal.confirm({
+        title: '🗑️ Delete Campaign',
+        message: `Delete campaign <strong>${campaignCode}</strong>? This cannot be undone.`,
+        confirmText: 'Delete',
+        confirmType: 'danger',
+        onConfirm: async () => {
+            try {
+                await API.delete(`/api/campaigns/${campaignCode}`);
+                Toast.success('Campaign deleted');
+                window.location.href = '/campaigns';
+            } catch (error) {
+                Toast.error('Failed to delete');
+            }
+        }
+    });
+}
+
+document.getElementById('campaignForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    try {
+        await API.patch(`/api/campaigns/${campaignCode}`, {
+            title: document.getElementById('title').value,
+            description: document.getElementById('description').value,
+            message_pt: document.getElementById('messagePt').value,
+            message_hu: document.getElementById('messageHu').value,
+            message_en: document.getElementById('messageEn').value,
+            buttons_json: buttons.length > 0 ? JSON.stringify(buttons) : null
+        });
+        
+        Toast.success('Campaign saved!');
+    } catch (error) {
+        Toast.error('Failed to save');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', loadCampaign);
+</script>
+
+<style>
+.deeplink-box {
+    background: linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%);
+    color: white;
+    padding: 1.25rem;
+}
+
+.deeplink-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.deeplink-content {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.deeplink-content .form-input {
+    flex: 1;
+    background: rgba(255,255,255,0.9);
+    color: #1f2937;
+}
+
+.deeplink-box .text-muted {
+    color: rgba(255,255,255,0.8);
+    margin-top: 0.5rem;
+    display: block;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.button-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.button-text {
+    font-weight: 500;
+}
+
+.button-url {
+    flex: 1;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.preview-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+}
+
+.preview-lang-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.preview-tab {
+    padding: 0.5rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preview-tab:hover {
+    background: var(--bg-hover);
+}
+
+.preview-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.mb-2 { margin-bottom: 1rem; }
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.ml-1 { margin-left: 0.5rem; }
+
+.badge-success { background: var(--success); color: white; }
+.badge-danger { background: var(--danger); color: white; }
+</style>
+{% endblock %}
+
